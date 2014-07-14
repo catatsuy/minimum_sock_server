@@ -1,0 +1,89 @@
+#!/bin/bash
+
+PATH=/usr/local/rbenv/shims:/usr/local/rbenv/bin:/usr/local/bin:/bin:/usr/bin:/sbin:/usr/sbin
+
+NAME=unicorn
+RACK_ENV=${RACK_ENV:-production}
+
+APP=minimum_sock_server
+EX_USER=www
+ROOT_DIR="/home/$EX_USER/$APP"
+PID="${ROOT_DIR}/tmp/pids/unicorn.pid"
+CONF="${ROOT_DIR}/config/unicorn/${RACK_ENV}.rb"
+
+if test "$USER" != "$EX_USER"; then
+  echo "please execute by $EX_USER user !!"
+  exit 1
+fi
+
+start() {
+  cd $ROOT_DIR
+  if test -e $PID && pgrep -F $PID > /dev/null; then
+    echo "$NAME already started";
+    exit 1;
+  fi
+  echo "start $NAME";
+  BUNDLE_GEMFILE="${ROOT_DIR}/Gemfile" bundle exec unicorn -c ${CONF} -E ${RACK_ENV} -D
+}
+
+stop() {
+  if ! ( test -e $PID && pgrep -F $PID > /dev/null ); then
+    echo "$NAME not started";
+    exit 1;
+  fi
+  echo "stop $NAME";
+  kill `cat ${PID}`
+  rm -f $PID
+}
+
+graceful_stop() {
+  if ! ( test -e $PID && pgrep -F $PID > /dev/null ); then
+    echo "$NAME not started";
+    exit 1;
+  fi
+  echo "stop $NAME";
+  kill -QUIT `cat ${PID}`
+  rm -f $PID
+}
+
+reload() {
+  if ! ( test -e $PID && pgrep -F $PID > /dev/null ); then
+    echo "$NAME not started";
+    start
+    exit 0;
+  fi
+  echo "reload $NAME";
+  kill -USR2 `cat ${PID}`
+}
+
+restart() {
+  if ! ( test -e $PID && pgrep -F $PID > /dev/null ); then
+    echo "$NAME not started";
+    start
+    exit 0;
+  fi
+  echo "restart $NAME";
+  graceful_stop
+  start
+}
+
+case "$1" in
+  start)
+    start
+    ;;
+  stop)
+    graceful_stop
+    ;;
+  force_stop)
+    stop
+    ;;
+  reload)
+    reload
+    ;;
+  restart)
+    restart
+    ;;
+  *)
+    echo "Syntax Error: check [start|stop|force_stop|reload|restart]"
+    ;;
+esac
